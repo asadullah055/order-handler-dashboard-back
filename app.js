@@ -11,11 +11,11 @@ const { errorMessage } = require('./src/utill/respons');
 const app = express();
 
 
-  const rateLimiter = rateLimit({
+  /* const rateLimiter = rateLimit({
     windowMs: 1 * 60 * 1000,
     max: 50,
     message: "Too many request from this API",
-  });
+  }); */
   const corsOptions = {
     origin: function (origin, callback) {
       // Allow requests with no origin (like mobile apps or curl requests)
@@ -26,7 +26,7 @@ const app = express();
     optionsSuccessStatus: 200,
   };
   app.use(cors(corsOptions))
-  app.use(rateLimiter);
+  // app.use(rateLimiter);
   app.use(express.json());
   app.use(mongoSanitize());
   app.use(helmet());
