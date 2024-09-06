@@ -7,6 +7,7 @@ const hpp = require("hpp");
 const cors = require("cors");
 const orderRoute = require("./src/routes/orderRoute");
 const { errorMessage } = require("./src/utill/respons");
+const connectDB = require("./src/config/db");
 const app = express();
 
 /* const rateLimiter = rateLimit({
@@ -34,6 +35,8 @@ app.get("/", (req, res) => {
 });
 
 app.use("/", orderRoute);
+
+connectDB()
 
 app.use((req, res, next) => {
   next(createError(404, "router not found"));
