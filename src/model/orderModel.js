@@ -69,26 +69,3 @@ const orderSchema = new Schema(
 );
 
 module.exports = model("orders", orderSchema);
-/* [
-  { orderNumber: "639159512065096", date: "2024-09-05" },
-
-  { orderNumber: "639157118354721", date: "2024-09-05" },
-
-  { orderNumber: "639132905607713", date: "2024-09-05" },
-  { orderNumber: "639132905607713", date: "2024-09-05" },
-
-  { orderNumber: "638747860339543", date: "2024-09-05" },
-
-  { orderNumber: "638739859355099", date: "2024-09-05" },
-  { orderNumber: "638739859355099", date: "2024-09-05" },
-
-  { orderNumber: "639190786640009", date: "2024-09-05" },
-
-  { orderNumber: "639199363506323", date: "2024-09-05" },
-
-  { orderNumber: "639187375965888", date: "2024-09-05" },
-
-  { orderNumber: "638752860719315", date: "2024-09-05" },
-
-  { orderNumber: "639206180033853", date: "2024-09-05" },
-] */;

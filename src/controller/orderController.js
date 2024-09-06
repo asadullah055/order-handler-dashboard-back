@@ -115,6 +115,18 @@ class orderController {
       next(error);
     }
   };
+  get_status_order = async (req, res, next) => {
+    try {
+      const allOrder = await orderModel.aggregate([
+        { $match: {} },
+        { $count: "totalOrders" },
+      ]);
+      const totalOrders = allOrder[0]?.totalOrders || 0;
+      successMessage(res, 200, { totalOrders });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 module.exports = new orderController();
