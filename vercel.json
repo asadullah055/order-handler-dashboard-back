@@ -10,22 +10,8 @@
   "routes": [
     {
       "src": "/(.*)",
-      "destination": "/index.js"
-    }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        {
-          "key": "Access-Control-Allow-Methods",
-          "value": "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        },
-        {
-          "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization"
-        }
-      ]
+      "destination": "/index.js",
+      "methods": ["GET", "POST", "PUT", "DELETE"]
     }
   ]
 }
