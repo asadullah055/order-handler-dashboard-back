@@ -1,3 +1,4 @@
+const createHttpError = require("http-errors");
 const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
 
@@ -98,20 +99,25 @@ class orderController {
 
       successMessage(res, 200, { order });
     } catch (error) {
-      next(error);
+      next();
     }
   };
   update_single_order = async (req, res, next) => {
     const orderNumber = req.params.orderNumber;
     const updateData = req.body;
-    try {
+      try {
       const updatedOrder = await orderModel.findOneAndUpdate(
         { orderNumber: orderNumber },
         { $set: updateData },
         { new: true, runValidators: true }
       );
-      successMessage(res, 200, { updatedOrder });
+    
+      successMessage(res, 200, {
+        updatedOrder,
+        message: "order update success",
+      });
     } catch (error) {
+     
       next(error);
     }
   };
@@ -122,11 +128,16 @@ class orderController {
         { $count: "totalOrders" },
       ]);
       const totalOrders = allOrder[0]?.totalOrders || 0;
+
       successMessage(res, 200, { totalOrders });
     } catch (error) {
       next(error);
     }
   };
+  update_bulk_order = async(req, res, next)=>{
+    const {orders} = req.body
+    // const 
+  }
 }
 
 module.exports = new orderController();

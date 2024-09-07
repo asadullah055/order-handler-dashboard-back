@@ -36,7 +36,7 @@ app.get("/", (req, res) => {
 
 app.use("/", orderRoute);
 
-connectDB()
+connectDB() 
 
 app.use((req, res, next) => {
   next(createError(404, "router not found"));
