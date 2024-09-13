@@ -42,15 +42,25 @@ class orderController {
     }
   };
   get_all_order = async (req, res, next) => {
-    const pageNo = Number(req.params.pageNo);
-    const perPage = Number(req.params.perPage);
-
+    const pageNo = Number(req.query.pageNo) || 1;
+    const perPage = Number(req.query.perPage) || 20;
+    const status = req.query.orderStatus || "";
+    const claim = req.query.claim || "";
+    const claimType = req.query.claimType || "";
+    const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
     let data;
 
+    // Build the match query
+    const matchQuery = {};
+    if (status) matchQuery.orderStatus = status;
+    if (claim) matchQuery.claim = claim;
+    if (claimType) matchQuery.claimType = claimType;
+    if (orderNumber) matchQuery.orderNumber = orderNumber;
+
     try {
       data = await orderModel.aggregate([
-        { $match: {} },
+        { $match: matchQuery },
         {
           $facet: {
             total: [{ $count: "count" }],
@@ -66,32 +76,26 @@ class orderController {
                   dfMailDate: 1,
                   receivedDate: 1,
                   claim: 1,
+                  claimType: 1,
                 },
               },
             ],
           },
         },
       ]);
+
       const totalItem = data[0].total[0] ? data[0].total[0].count : 0;
-      const totalPages = Math.ceil(totalItem / perPage);
-      const showItem = data[0].orders.length;
-      const startItem = (pageNo - 1) * perPage + 1;
-      const endItem = Math.min(pageNo * perPage, totalItem);
+
+
       successMessage(res, 200, {
         totalItem,
-        totalPages,
-        perPage,
-        pageNo,
-        showItem,
-        startItem,
-        endItem,
-        message: `Showing ${startItem} to ${endItem} of ${totalItem} orders`,
         orders: data[0].orders,
       });
     } catch (error) {
       next(error);
     }
   };
+
   get_single_order = async (req, res, next) => {
     const orderNumber = req.params.orderNumber;
     try {
@@ -105,19 +109,18 @@ class orderController {
   update_single_order = async (req, res, next) => {
     const orderNumber = req.params.orderNumber;
     const updateData = req.body;
-      try {
+    try {
       const updatedOrder = await orderModel.findOneAndUpdate(
         { orderNumber: orderNumber },
         { $set: updateData },
         { new: true, runValidators: true }
       );
-    
+
       successMessage(res, 200, {
         updatedOrder,
         message: "order update success",
       });
     } catch (error) {
-     
       next(error);
     }
   };
@@ -134,10 +137,10 @@ class orderController {
       next(error);
     }
   };
-  update_bulk_order = async(req, res, next)=>{
-    const {orders} = req.body
-    // const 
-  }
+  update_bulk_order = async (req, res, next) => {
+    const { orders } = req.body;
+    // const
+  };
 }
 
 module.exports = new orderController();
