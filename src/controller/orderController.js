@@ -1,4 +1,4 @@
-const createHttpError = require("http-errors");
+const createError = require("http-errors");
 const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
 
@@ -36,7 +36,10 @@ class orderController {
       // Insert the new orders
       await orderModel.insertMany(newOrders);
 
-      successMessage(res, 200, { insertedOrders: newOrders });
+      successMessage(res, 200, {
+        insertedOrders: newOrders,
+        message: "Order Add success",
+      });
     } catch (error) {
       next(error);
     }
@@ -55,7 +58,7 @@ class orderController {
     const matchQuery = {};
     if (status) matchQuery.orderStatus = status;
     if (claim) matchQuery.claim = claim;
-    if (claimType) matchQuery.claimType = claimType;
+    if (claimType) matchQuery.approvedOrReject = claimType;
     if (orderNumber) matchQuery.orderNumber = orderNumber;
 
     try {
@@ -76,7 +79,7 @@ class orderController {
                   dfMailDate: 1,
                   receivedDate: 1,
                   claim: 1,
-                  claimType: 1,
+                  approvedOrReject: 1,
                 },
               },
             ],
@@ -85,7 +88,6 @@ class orderController {
       ]);
 
       const totalItem = data[0].total[0] ? data[0].total[0].count : 0;
-
 
       successMessage(res, 200, {
         totalItem,
@@ -118,7 +120,7 @@ class orderController {
 
       successMessage(res, 200, {
         updatedOrder,
-        message: "order update success",
+        message: "Order update success",
       });
     } catch (error) {
       next(error);
@@ -130,16 +132,78 @@ class orderController {
         { $match: {} },
         { $count: "totalOrders" },
       ]);
-      const totalOrders = allOrder[0]?.totalOrders || 0;
 
-      successMessage(res, 200, { totalOrders });
+      const deliveryFailed = await orderModel.aggregate([
+        { $match: { orderStatus: "Delivery Failed" } },
+        { $count: "totalDF" },
+      ]);
+      const returnOrder = await orderModel.aggregate([
+        { $match: { orderStatus: "Return" } },
+        { $count: "totalReturn" },
+      ]);
+
+      const totalOrders = allOrder[0]?.totalOrders || 0;
+      const totalDF = deliveryFailed[0]?.totalDF || 0;
+      const totalReturn = returnOrder[0]?.totalReturn || 0;
+
+      successMessage(res, 200, { totalOrders, totalDF, totalReturn });
     } catch (error) {
       next(error);
     }
   };
+
   update_bulk_order = async (req, res, next) => {
-    const { orders } = req.body;
-    // const
+    try {
+      const reqBody = req.body;
+
+      const orderNumbers = reqBody.map((order) => order.orderNumber);
+
+      const transitOrders = await orderModel.aggregate([
+        {
+          $match: {
+            orderNumber: { $in: orderNumbers },
+            orderStatus: "transit", 
+          },
+        },
+        {
+          $project: { orderNumber: 1, orderStatus: 1 },
+        },
+      ]);
+
+      const foundOrderNumbers = transitOrders.map(order => order.orderNumber);
+      const missingOrders = orderNumbers.filter(orderNumber => !foundOrderNumbers.includes(orderNumber)); 
+      
+      
+      
+      const bulkOps = transitOrders.map((order) => {
+        const updatedOrder = reqBody.find(
+          (item) => item.orderNumber === order.orderNumber
+        );
+
+        const update = {
+          $set: {
+            orderStatus: updatedOrder.status,
+            ...(updatedOrder.status === "Delivery Failed" && {
+              dfMailDate: updatedOrder.date,
+            }),
+          },
+        };
+
+        return {
+          updateOne: {
+            filter: { orderNumber: order.orderNumber },
+            update,
+          },
+        };
+      });
+
+      await orderModel.bulkWrite(bulkOps);
+
+      successMessage(res, 200, { message: "update success", missingOrders  });
+    } catch (error) {
+     
+      next(error);
+    }
   };
 }
 
