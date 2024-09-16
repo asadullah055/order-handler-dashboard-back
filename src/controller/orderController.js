@@ -52,6 +52,8 @@ class orderController {
     const claimType = req.query.claimType || "";
     const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
+    const date = req.query.date ? new Date(req.query.date) : null;
+    const receivedDate = req.query.receivedDate ? new Date(req.query.receivedDate) : null;
     let data;
 
     // Build the match query
@@ -60,6 +62,9 @@ class orderController {
     if (claim) matchQuery.claim = claim;
     if (claimType) matchQuery.approvedOrReject = claimType;
     if (orderNumber) matchQuery.orderNumber = orderNumber;
+    if (date) matchQuery.date = date;
+    if (receivedDate) matchQuery.receivedDate = receivedDate;
+
 
     try {
       data = await orderModel.aggregate([
@@ -80,6 +85,7 @@ class orderController {
                   receivedDate: 1,
                   claim: 1,
                   approvedOrReject: 1,
+                 
                 },
               },
             ],
@@ -162,7 +168,7 @@ class orderController {
         {
           $match: {
             orderNumber: { $in: orderNumbers },
-            orderStatus: "transit", 
+            orderStatus: "transit",
           },
         },
         {
@@ -170,11 +176,11 @@ class orderController {
         },
       ]);
 
-      const foundOrderNumbers = transitOrders.map(order => order.orderNumber);
-      const missingOrders = orderNumbers.filter(orderNumber => !foundOrderNumbers.includes(orderNumber)); 
-      
-      
-      
+      const foundOrderNumbers = transitOrders.map((order) => order.orderNumber);
+      const missingOrders = orderNumbers.filter(
+        (orderNumber) => !foundOrderNumbers.includes(orderNumber)
+      );
+
       const bulkOps = transitOrders.map((order) => {
         const updatedOrder = reqBody.find(
           (item) => item.orderNumber === order.orderNumber
@@ -199,9 +205,8 @@ class orderController {
 
       await orderModel.bulkWrite(bulkOps);
 
-      successMessage(res, 200, { message: "update success", missingOrders  });
+      successMessage(res, 200, { message: "update success", missingOrders });
     } catch (error) {
-     
       next(error);
     }
   };

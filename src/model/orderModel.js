@@ -29,9 +29,10 @@ const orderSchema = new Schema(
       default: "",
     },
     claimType: {
-      type: String,
-      default: "",
+      type: [Object],
+      default: [],
     },
+    // claim submit mail date
     csmd: {
       type: String,
       default: "",
