@@ -44,6 +44,7 @@ class sellerController {
     }
   };
   login_seller = async (req, res, next) => {
+     
     try {
       const { email, password } = req.body;
       const seller = await sellerModel.findOne({ email });
@@ -69,7 +70,7 @@ class sellerController {
         maxAge: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         httpOnly: true,
         secure: true,
-        // sameSite: "none",
+        sameSite: "none",
       });
 
       successMessage(res, 200, {
@@ -78,12 +79,13 @@ class sellerController {
       });
     } catch (error) {
       console.log(error);
-
       next(error);
     }
   };
   get_seller = async (req, res, next) => {
+    
     const { id } = req;
+ 
     try {
       const seller = await sellerModel.findById(id);
       successMessage(res, 200, { seller });

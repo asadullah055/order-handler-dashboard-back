@@ -1,5 +1,5 @@
 const { Schema, model } = require("mongoose");
-
+const mongoose = require("mongoose");
 const orderSchema = new Schema(
   {
     orderNumber: {
@@ -7,6 +7,7 @@ const orderSchema = new Schema(
       required: true,
       unique: true,
     },
+    sellerId: { type: mongoose.Schema.Types.ObjectId },
     date: {
       type: Date,
       required: true,
@@ -23,6 +24,10 @@ const orderSchema = new Schema(
     receivedDate: {
       type: Date,
       default: "",
+    },
+    settled: {
+      type: Boolean,
+      default: false,
     },
     claim: {
       type: String,
