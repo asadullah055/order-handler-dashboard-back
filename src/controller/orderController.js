@@ -1,10 +1,12 @@
 const createError = require("http-errors");
 const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
-
+const mongoose = require("mongoose");
+const objectId = mongoose.Types.ObjectId.createFromHexString;
 class orderController {
   add_order = async (req, res, next) => {
     const orders = req.body;
+    const sellerId = objectId(req.id);
     const orderNumbers = orders.map((order) => order.orderNumber);
 
     try {
@@ -12,6 +14,7 @@ class orderController {
         {
           $match: {
             orderNumber: { $in: orderNumbers },
+            sellerId: sellerId,
           },
         },
         {
@@ -32,12 +35,15 @@ class orderController {
       if (newOrders.length === 0) {
         return res.status(400).json({ message: "All orders already exist" });
       }
-
+      const ordersWithSellerId = newOrders.map((order) => ({
+        ...order,
+        sellerId,
+      }));
       // Insert the new orders
-      await orderModel.insertMany(newOrders);
+      await orderModel.insertMany(ordersWithSellerId);
 
       successMessage(res, 200, {
-        insertedOrders: newOrders,
+        insertedOrders: ordersWithSellerId,
         message: "Order Add success",
       });
     } catch (error) {
@@ -53,7 +59,10 @@ class orderController {
     const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
     const date = req.query.date ? new Date(req.query.date) : null;
-    const receivedDate = req.query.receivedDate ? new Date(req.query.receivedDate) : null;
+    const receivedDate = req.query.receivedDate
+      ? new Date(req.query.receivedDate)
+      : null;
+    const sellerId = req.id ? objectId(req.id) : null;
     let data;
 
     // Build the match query
@@ -64,7 +73,7 @@ class orderController {
     if (orderNumber) matchQuery.orderNumber = orderNumber;
     if (date) matchQuery.date = date;
     if (receivedDate) matchQuery.receivedDate = receivedDate;
-
+    if (sellerId) matchQuery.sellerId = sellerId;
 
     try {
       data = await orderModel.aggregate([
@@ -85,7 +94,6 @@ class orderController {
                   receivedDate: 1,
                   claim: 1,
                   approvedOrReject: 1,
-                 
                 },
               },
             ],
@@ -106,9 +114,15 @@ class orderController {
 
   get_single_order = async (req, res, next) => {
     const orderNumber = req.params.orderNumber;
+    const sellerId = objectId(req.id);
     try {
-      const order = await orderModel.findOne({ orderNumber: orderNumber });
-
+      const order = await orderModel.findOne({
+        orderNumber: orderNumber,
+        sellerId,
+      });
+      /* if (!order) {
+        return res.status(404).json({ message: "Order not found or does not belong to this seller." });
+      } */
       successMessage(res, 200, { order });
     } catch (error) {
       next();
@@ -117,9 +131,11 @@ class orderController {
   update_single_order = async (req, res, next) => {
     const orderNumber = req.params.orderNumber;
     const updateData = req.body;
+    const sellerId = objectId(req.id);
+
     try {
       const updatedOrder = await orderModel.findOneAndUpdate(
-        { orderNumber: orderNumber },
+        { sellerId, orderNumber },
         { $set: updateData },
         { new: true, runValidators: true }
       );
@@ -129,30 +145,38 @@ class orderController {
         message: "Order update success",
       });
     } catch (error) {
+      console.log(error);
+
       next(error);
     }
   };
   get_status_order = async (req, res, next) => {
     try {
-      const allOrder = await orderModel.aggregate([
-        { $match: {} },
-        { $count: "totalOrders" },
+      const data = await orderModel.aggregate([
+        { $match: { sellerId: objectId(req.id) } },
+        {
+          $group: {
+            _id: null,
+            totalOrders: { $sum: 1 },
+            totalDF: {
+              $sum: {
+                $cond: [{ $eq: ["$orderStatus", "Delivery Failed"] }, 1, 0],
+              },
+            },
+            totalReturn: {
+              $sum: { $cond: [{ $eq: ["$orderStatus", "Return"] }, 1, 0] },
+            },
+          },
+        },
       ]);
 
-      const deliveryFailed = await orderModel.aggregate([
-        { $match: { orderStatus: "Delivery Failed" } },
-        { $count: "totalDF" },
-      ]);
-      const returnOrder = await orderModel.aggregate([
-        { $match: { orderStatus: "Return" } },
-        { $count: "totalReturn" },
-      ]);
+      const result = data[0] || { totalOrders: 0, totalDF: 0, totalReturn: 0 };
 
-      const totalOrders = allOrder[0]?.totalOrders || 0;
-      const totalDF = deliveryFailed[0]?.totalDF || 0;
-      const totalReturn = returnOrder[0]?.totalReturn || 0;
-
-      successMessage(res, 200, { totalOrders, totalDF, totalReturn });
+      successMessage(res, 200, {
+        totalOrders: result.totalOrders,
+        totalDF: result.totalDF,
+        totalReturn: result.totalReturn,
+      });
     } catch (error) {
       next(error);
     }
@@ -161,12 +185,13 @@ class orderController {
   update_bulk_order = async (req, res, next) => {
     try {
       const reqBody = req.body;
-
+      const sellerId = objectId(req.id);
       const orderNumbers = reqBody.map((order) => order.orderNumber);
 
       const transitOrders = await orderModel.aggregate([
         {
           $match: {
+            sellerId: sellerId,
             orderNumber: { $in: orderNumbers },
             orderStatus: "transit",
           },

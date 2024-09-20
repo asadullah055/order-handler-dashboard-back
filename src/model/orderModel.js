@@ -5,7 +5,6 @@ const orderSchema = new Schema(
     orderNumber: {
       type: String,
       required: true,
-      unique: true,
     },
     sellerId: { type: mongoose.Schema.Types.ObjectId },
     date: {
@@ -38,14 +37,14 @@ const orderSchema = new Schema(
       default: [],
     },
     // claim submit mail date
-    csmd: {
+   /*  csmd: {
       type: String,
       default: "",
-    },
-    caseNumber: {
+    }, */
+   /*  caseNumber: {
       type: String,
       default: "",
-    },
+    }, */
     approvedOrReject: {
       type: String,
       default: "",
