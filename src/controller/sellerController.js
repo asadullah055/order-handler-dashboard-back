@@ -44,7 +44,6 @@ class sellerController {
     }
   };
   login_seller = async (req, res, next) => {
-     
     try {
       const { email, password } = req.body;
       const seller = await sellerModel.findOne({ email });
@@ -70,7 +69,7 @@ class sellerController {
         maxAge: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         httpOnly: true,
         secure: process.env !== "development",
-        sameSite: "lax",
+        sameSite: "none",
       });
 
       successMessage(res, 200, {
@@ -83,9 +82,8 @@ class sellerController {
     }
   };
   get_seller = async (req, res, next) => {
-    
     const { id } = req;
- 
+
     try {
       const seller = await sellerModel.findById(id);
       successMessage(res, 200, { seller });
@@ -99,26 +97,40 @@ class sellerController {
     const form = formidable();
 
     form.parse(req, async (err, fields, files) => {
+      if (err) {
+        return next(err);
+      }
+
       const { image } = files;
       const { shopName, name } = fields;
+
       try {
-        const result = await uploadToCloudinary(
-          image.filepath,
-          "order_management"
-        );
-        if (result) {
-          await sellerModel.findByIdAndUpdate(id, {
-            shopLogo: result.url,
-            shopName,
-            name,
-          });
+        let updateData = { shopName, name };
+
+        // If an image file is provided, upload it to Cloudinary
+        if (image) {
+          const result = await uploadToCloudinary(
+            image.filepath,
+            "order_management"
+          );
+
+          // Add the image URL to updateData only if the upload succeeds
+          if (result && result.url) {
+            updateData.shopLogo = result.url;
+          }
         }
+
+        // Update the seller profile with or without the image URL
+        await sellerModel.findByIdAndUpdate(id, updateData);
+
         const seller = await sellerModel.findById(id);
-        successMessage(res, 200,{ seller, message: "update success fully" });
+        successMessage(res, 200, {
+          seller,
+          message: "Profile updated successfully",
+        });
       } catch (error) {
         console.log(error);
-        
-       next(error)
+        next(error);
       }
     });
   };
