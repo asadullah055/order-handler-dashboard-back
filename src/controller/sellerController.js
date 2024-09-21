@@ -69,8 +69,8 @@ class sellerController {
       res.cookie("accessToken", token, {
         maxAge: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
         httpOnly: true,
-        secure: true,
-        // sameSite: "strict",
+        secure: "https://order-handler-dashboard.vercel.app/",
+        sameSite: "strict",
       });
 
       successMessage(res, 200, {
