@@ -25,22 +25,32 @@ const orderSchema = new Schema(
       default: "",
     },
     settled: {
-      type: Boolean,
-      default: false,
+      type: String,
+      default: 'No',
     },
     claim: {
       type: String,
       default: "",
     },
     claimType: {
-      type: [Object],
+      type: [
+        {
+          claimName: { type: String },
+          caseNumber: { type: String}, // Ensure it's unique
+          claimDate: { type: String },
+          claimStatus: { type: String },
+          paidAmount: { type: String},
+          invoiceCycle: { type: String },
+          claimDetails: { type: String },
+          arMailDate: { type: String },
+        },
+      ],
       default: [],
     },
     comment: {
       type: String,
       default: "",
     },
-   
   },
   { timestamps: true, versionKey: false }
 );

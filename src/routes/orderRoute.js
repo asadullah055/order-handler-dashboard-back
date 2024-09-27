@@ -7,7 +7,7 @@ const orderRoute = express.Router();
 orderRoute.post("/add-order", isLoggedIn, orderController.add_order);
 orderRoute.get("/all-order",isLoggedIn,  orderController.get_all_order);
 orderRoute.get(
-  "/order/:orderNumber",
+  "/order/:identifier",
   isLoggedIn,
   orderController.get_single_order
 );
