@@ -134,6 +134,16 @@ class sellerController {
       }
     });
   };
+
+  logout = async (req, res, next) => {
+    try {
+      res.clearCookie("accessToken");
+      // success message
+      successMessage(res, 200, { message: "Logout successfully" });
+    } catch (error) {
+      next(error);
+    }
+  };
 }
 
 module.exports = new sellerController();

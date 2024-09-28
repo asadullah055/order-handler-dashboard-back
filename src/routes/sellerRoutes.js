@@ -9,5 +9,6 @@ sellerRoute.post("/registration", sellerController.registration_seller);
 sellerRoute.post("/seller-login", sellerController.login_seller);
 sellerRoute.put("/update-profile", isLoggedIn, sellerController.update_profile);
 sellerRoute.get("/get-seller", isLoggedIn, sellerController.get_seller);
+sellerRoute.post("/logout", isLoggedIn, sellerController.logout);
 
 module.exports = sellerRoute;
