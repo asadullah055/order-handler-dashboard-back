@@ -2,12 +2,14 @@ const createError = require("http-errors");
 const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
 const mongoose = require("mongoose");
+const get_order = require("../service/getOrderService");
 const objectId = mongoose.Types.ObjectId.createFromHexString;
 class orderController {
   add_order = async (req, res, next) => {
-    const orders = req.body;
+    const { newOrders } = req.body;
+
     const sellerId = objectId(req.id);
-    const orderNumbers = orders.map((order) => order.orderNumber);
+    const orderNumbers = newOrders.map((order) => order.orderNumber);
 
     try {
       const existingOrders = await orderModel.aggregate([
@@ -28,17 +30,26 @@ class orderController {
       );
 
       // Filter out orders that have existing order numbers
-      const newOrders = orders.filter(
+      const orders = newOrders.filter(
         (order) => !existingOrderNumbers.includes(order.orderNumber)
       );
 
-      if (newOrders.length === 0) {
+      if (!req.body.confirmInsert) {
+        return res.status(200).json({
+          uniqueOrderCount: orders.length,
+          message: "Total unique order numbers",
+        });
+      }
+
+      if (orders.length === 0) {
         return res.status(400).json({ message: "All orders already exist" });
       }
-      const ordersWithSellerId = newOrders.map((order) => ({
+
+      const ordersWithSellerId = orders.map((order) => ({
         ...order,
         sellerId,
       }));
+
       // Insert the new orders
       await orderModel.insertMany(ordersWithSellerId);
 
@@ -47,6 +58,8 @@ class orderController {
         message: "Order Add success",
       });
     } catch (error) {
+      console.log(error);
+
       next(error);
     }
   };
@@ -90,15 +103,13 @@ class orderController {
     if (date) matchQuery.date = date;
     if (receivedDate) matchQuery.receivedDate = receivedDate;
     if (dfMailDate) matchQuery.dfMailDate = dfMailDate;
-    if (settled.length) matchQuery.settled = {$in:settled};
+    if (settled.length) matchQuery.settled = { $in: settled };
     if (sellerId) matchQuery.sellerId = sellerId;
-    
 
-    // Use $or for orderNumber or claimType.caseNumber search
     if (orderNumber) {
       matchQuery.$or = [
-        { orderNumber }, // Match directly with orderNumber
-        { claimType: { $elemMatch: { caseNumber: orderNumber } } }, // Match caseNumber within claimType array
+        { orderNumber },
+        { claimType: { $elemMatch: { caseNumber: orderNumber } } },
       ];
     }
 
@@ -133,6 +144,45 @@ class orderController {
       successMessage(res, 200, {
         totalItem,
         orders: data[0].orders,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+  get_unsettled_order = async (req, res, next) => {
+    try {
+      const data = await get_order(req, { settled: "No" });
+      const totalUnsettledItem = data[0].total[0] ? data[0].total[0].count : 0;
+      successMessage(res, 200, {
+        totalUnsettledItem,
+        unsettledOrders: data[0].orders,
+      });
+    } catch (error) {
+      console.log(error);
+      next(error);
+    }
+  };
+  get_returned_order = async (req, res, next) => {
+    try {
+      const data = await get_order(req, { orderStatus: "Return" });
+      const totalReturnItem = data[0].total[0] ? data[0].total[0].count : 0;
+      successMessage(res, 200, {
+        totalReturnItem,
+        returnOrders: data[0].orders,
+      });
+    } catch (error) {
+      console.log(error);
+
+      next(error);
+    }
+  };
+  get_delivery_failed_order = async (req, res, next) => {
+    try {
+      const data = await get_order(req, { orderStatus: "Delivery Failed" });
+      const totalDfItem = data[0].total[0] ? data[0].total[0].count : 0;
+      successMessage(res, 200, {
+        totalDfItem,
+        dfOrders: data[0].orders,
       });
     } catch (error) {
       next(error);
@@ -213,24 +263,71 @@ class orderController {
           $group: {
             _id: null,
             totalOrders: { $sum: 1 },
+            totalTransit: {
+              $sum: {
+                $cond: [{ $eq: ["$orderStatus", "transit"] }, 1, 0],
+              },
+            },
             totalDF: {
               $sum: {
                 $cond: [{ $eq: ["$orderStatus", "Delivery Failed"] }, 1, 0],
               },
             },
+            totalDelivered: {
+              $sum: {
+                $cond: [{ $eq: ["$orderStatus", "Delivered"] }, 1, 0],
+              },
+            },
             totalReturn: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "Return"] }, 1, 0] },
+            },
+            totalUnSettled: {
+              $sum: { $cond: [{ $eq: ["$settled", "No"] }, 1, 0] },
+            },
+         
+            totalNotDrop: {
+              $sum: { $cond: [{ $eq: ["$orderStatus", "Not Drop"] }, 1, 0] },
+            },
+            totalItemLoss: {
+              $sum: { $cond: [{ $eq: ["$orderStatus", "Item Loss"] }, 1, 0] },
+            },
+            totalScraped: {
+              $sum: { $cond: [{ $eq: ["$orderStatus", "Scraped"] }, 1, 0] },
+            },
+            totalNRY: {
+              $sum: {
+                $cond: [{ $eq: ["$orderStatus", "No Return Yet"] }, 1, 0],
+              },
             },
           },
         },
       ]);
 
-      const result = data[0] || { totalOrders: 0, totalDF: 0, totalReturn: 0 };
+      const result = data[0] || {
+        totalOrders: 0,
+        totalDF: 0,
+        totalReturn: 0,
+        totalUnSettled: 0,
+        totalTransit: 0,
+        totalNotDrop: 0,
+        totalItemLoss: 0,
+        totalScraped: 0,
+        totalNRY: 0,
+        totalDelivered: 0,
+      };
 
       successMessage(res, 200, {
         totalOrders: result.totalOrders,
+        totalTransit: result.totalTransit,
         totalDF: result.totalDF,
         totalReturn: result.totalReturn,
+        totalUnSettled: result.totalUnSettled,
+        totalTransit: result.totalTransit,
+        totalNotDrop: result.totalNotDrop,
+        totalItemLoss: result.totalItemLoss,
+        totalScraped: result.totalScraped,
+        totalNRY: result.totalNRY,
+        totalDelivered: result.totalDelivered,
       });
     } catch (error) {
       next(error);
@@ -239,11 +336,30 @@ class orderController {
 
   update_bulk_order = async (req, res, next) => {
     try {
-      const reqBody = req.body; // List of orders to update
-      const sellerId = objectId(req.id); // Seller ID from request
-      const orderNumbers = reqBody.map((order) => order.orderNumber); // Extract order numbers from the request body
+      const reqBody = req.body;
+      console.log();
 
-      // Step 1: Find the orders that are in transit for the given seller and order numbers
+      const sellerId = objectId(req.id);
+      const orderNumbers = reqBody.map((order) => order.orderNumber);
+
+      const foundOrder = await orderModel.aggregate([
+        {
+          $match: {
+            sellerId: sellerId,
+            orderNumber: { $in: orderNumbers },
+          },
+        },
+        {
+          $project: { orderNumber: 1 },
+        },
+      ]);
+
+      const foundOrderNumbers = foundOrder.map((order) => order.orderNumber);
+
+      const missingOrders = orderNumbers.filter(
+        (orderNumber) => !foundOrderNumbers.includes(orderNumber)
+      );
+
       const transitOrders = await orderModel.aggregate([
         {
           $match: {
@@ -257,15 +373,6 @@ class orderController {
         },
       ]);
 
-      // Step 2: Extract order numbers that were found
-      const foundOrderNumbers = transitOrders.map((order) => order.orderNumber);
-
-      // Step 3: Identify the missing orders (i.e., orders not found in the transitOrders list)
-      const missingOrders = orderNumbers.filter(
-        (orderNumber) => !foundOrderNumbers.includes(orderNumber)
-      );
-
-      // Step 4: Prepare bulk operations for updating the orders
       const bulkOps = transitOrders.map((order) => {
         const updatedOrder = reqBody.find(
           (item) => item.orderNumber === order.orderNumber
