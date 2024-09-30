@@ -185,6 +185,8 @@ class orderController {
         dfOrders: data[0].orders,
       });
     } catch (error) {
+      console.log(error);
+      
       next(error);
     }
   };
@@ -337,7 +339,7 @@ class orderController {
   update_bulk_order = async (req, res, next) => {
     try {
       const reqBody = req.body;
-      console.log();
+     
 
       const sellerId = objectId(req.id);
       const orderNumbers = reqBody.map((order) => order.orderNumber);
