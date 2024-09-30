@@ -85,13 +85,11 @@ class orderController {
     const claimType = req.query.claimType || "";
     const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
-    const date = req.query.date ? new Date(req.query.date) : null;
-    const receivedDate = req.query.receivedDate
-      ? new Date(req.query.receivedDate)
-      : null;
-    const dfMailDate = req.query.dfMailDate
-      ? new Date(req.query.dfMailDate)
-      : null;
+
+    const { startDate, endDate } = req.query.date || {};
+
+    const receivedDate = req.query.receivedDate || {};
+    const dfMailDate = req.query.dfMailDate || {};
     const sellerId = req.id ? objectId(req.id) : null;
     let data;
 
@@ -100,9 +98,6 @@ class orderController {
     if (status.length) matchQuery.orderStatus = { $in: status };
     if (claim.length) matchQuery.claim = { $in: claim };
     if (claimType) matchQuery.approvedOrReject = claimType;
-    if (date) matchQuery.date = date;
-    if (receivedDate) matchQuery.receivedDate = receivedDate;
-    if (dfMailDate) matchQuery.dfMailDate = dfMailDate;
     if (settled.length) matchQuery.settled = { $in: settled };
     if (sellerId) matchQuery.sellerId = sellerId;
 
@@ -111,6 +106,29 @@ class orderController {
         { orderNumber },
         { claimType: { $elemMatch: { caseNumber: orderNumber } } },
       ];
+    }
+
+    if (startDate && endDate) {
+      matchQuery.date = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate),
+      };
+    }
+
+    // Adding filter for receivedDate
+    if (receivedDate.startDate && receivedDate.endDate) {
+      matchQuery.receivedDate = {
+        $gte: new Date(receivedDate.startDate),
+        $lte: new Date(receivedDate.endDate),
+      };
+    }
+
+    // Adding filter for dfMailDate
+    if (dfMailDate.startDate && dfMailDate.endDate) {
+      matchQuery.dfMailDate = {
+        $gte: new Date(dfMailDate.startDate),
+        $lte: new Date(dfMailDate.endDate),
+      };
     }
 
     try {
@@ -123,17 +141,6 @@ class orderController {
               { $sort: { date: -1 } },
               { $skip: skipRow },
               { $limit: perPage },
-              /* {
-                $project: {
-                  orderNumber: 1,
-                  date: 1,
-                  orderStatus: 1,
-                  dfMailDate: 1,
-                  receivedDate: 1,
-                  claim: 1,
-                  approvedOrReject: 1,
-                },
-              }, */
             ],
           },
         },
@@ -146,9 +153,11 @@ class orderController {
         orders: data[0].orders,
       });
     } catch (error) {
+      console.log(error);
       next(error);
     }
   };
+
   get_unsettled_order = async (req, res, next) => {
     try {
       const data = await get_order(req, { settled: "No" });
@@ -186,7 +195,7 @@ class orderController {
       });
     } catch (error) {
       console.log(error);
-      
+
       next(error);
     }
   };
@@ -286,7 +295,7 @@ class orderController {
             totalUnSettled: {
               $sum: { $cond: [{ $eq: ["$settled", "No"] }, 1, 0] },
             },
-         
+
             totalNotDrop: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "Not Drop"] }, 1, 0] },
             },
@@ -339,7 +348,6 @@ class orderController {
   update_bulk_order = async (req, res, next) => {
     try {
       const reqBody = req.body;
-     
 
       const sellerId = objectId(req.id);
       const orderNumbers = reqBody.map((order) => order.orderNumber);
