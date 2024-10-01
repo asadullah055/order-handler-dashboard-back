@@ -82,7 +82,7 @@ class orderController {
       ? [req.query.settled]
       : [];
 
-    const claimType = req.query.claimType || "";
+    // const claimType = req.query.claimType || "";
     const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
 
@@ -97,7 +97,7 @@ class orderController {
 
     if (status.length) matchQuery.orderStatus = { $in: status };
     if (claim.length) matchQuery.claim = { $in: claim };
-    if (claimType) matchQuery.approvedOrReject = claimType;
+    // if (claimType) matchQuery.approvedOrReject = claimType;
     if (settled.length) matchQuery.settled = { $in: settled };
     if (sellerId) matchQuery.sellerId = sellerId;
 
@@ -392,7 +392,7 @@ class orderController {
           $set: {
             orderStatus: updatedOrder.status, // Update the order status
             ...(updatedOrder.status === "Delivery Failed" && {
-              dfMailDate: updatedOrder.date, // If Delivery Failed, update dfMailDate
+              receivedDate: updatedOrder.date, 
             }),
             // Set settled based on the order status
             settled: updatedOrder.status === "Delivered" ? "Yes" : "No",
@@ -413,6 +413,8 @@ class orderController {
       // Step 6: Send success response with missing orders
       successMessage(res, 200, { message: "Update success", missingOrders });
     } catch (error) {
+      console.log(error);
+      
       next(error); // Pass any error to the error handler
     }
   };

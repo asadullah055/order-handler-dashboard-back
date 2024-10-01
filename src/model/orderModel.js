@@ -36,7 +36,7 @@ const orderSchema = new Schema(
       type: [
         {
           claimName: { type: String },
-          caseNumber: { type: String}, // Ensure it's unique
+          caseNumber: { type: String}, 
           claimDate: { type: String },
           claimStatus: { type: String },
           paidAmount: { type: String},
