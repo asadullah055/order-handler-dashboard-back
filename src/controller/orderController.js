@@ -160,7 +160,38 @@ class orderController {
 
   get_unsettled_order = async (req, res, next) => {
     try {
-      const data = await get_order(req, { settled: "No" });
+      const fortyFiveDaysAgo = new Date();
+      fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+      const data = await get_order(req, {
+        settled: "No",
+        orderStatus: "transit",
+        date: { $lte: fortyFiveDaysAgo },
+      });
+      /* const pageNo = Number(req.query.pageNo) || 1;
+      const perPage = Number(req.query.perPage) || 20;
+      const skipRow = (pageNo - 1) * perPage;
+     
+
+      let data = await orderModel.aggregate([
+        {
+          $match: {
+            sellerId: objectId(req.id),
+            settled: "No",
+            orderStatus: "transit",
+            date: { $lte: fortyFiveDaysAgo },
+          },
+        },
+        {
+          $facet: {
+            total: [{ $count: "count" }],
+            orders: [
+              { $sort: { date: -1 } },
+              { $skip: skipRow },
+              { $limit: perPage },
+            ],
+          },
+        },
+      ]); */
       const totalUnsettledItem = data[0].total[0] ? data[0].total[0].count : 0;
       successMessage(res, 200, {
         totalUnsettledItem,
@@ -268,6 +299,8 @@ class orderController {
   };
   get_status_order = async (req, res, next) => {
     try {
+      const fortyFiveDaysAgo = new Date();
+      fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
       const data = await orderModel.aggregate([
         { $match: { sellerId: objectId(req.id) } },
         {
@@ -293,7 +326,19 @@ class orderController {
               $sum: { $cond: [{ $eq: ["$orderStatus", "Return"] }, 1, 0] },
             },
             totalUnSettled: {
-              $sum: { $cond: [{ $eq: ["$settled", "No"] }, 1, 0] },
+              $sum: {
+                $cond: [
+                  {
+                    $and: [
+                      { $eq: ["$settled", "No"] },
+                      { $eq: ["$orderStatus", "transit"] },
+                      { $lte: ["$date", fortyFiveDaysAgo] },
+                    ],
+                  },
+                  1,
+                  0,
+                ],
+              },
             },
 
             totalNotDrop: {
@@ -392,7 +437,7 @@ class orderController {
           $set: {
             orderStatus: updatedOrder.status, // Update the order status
             ...(updatedOrder.status === "Delivery Failed" && {
-              receivedDate: updatedOrder.date, 
+              receivedDate: updatedOrder.date,
             }),
             // Set settled based on the order status
             settled: updatedOrder.status === "Delivered" ? "Yes" : "No",
@@ -414,7 +459,7 @@ class orderController {
       successMessage(res, 200, { message: "Update success", missingOrders });
     } catch (error) {
       console.log(error);
-      
+
       next(error); // Pass any error to the error handler
     }
   };
