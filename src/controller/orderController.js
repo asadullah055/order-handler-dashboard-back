@@ -162,7 +162,6 @@ class orderController {
     try {
       const fortyFiveDaysAgo = new Date();
       fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
-
       // Define primary filters to find unsettled or claimed orders
       const filters = [
         {
@@ -171,6 +170,7 @@ class orderController {
           date: { $lte: fortyFiveDaysAgo },
         },
         {
+          settled: "No",
           claim: "Yes",
         },
       ];
@@ -357,7 +357,12 @@ class orderController {
                           { $lte: ["$date", fortyFiveDaysAgo] },
                         ],
                       },
-                      { $eq: ["$claim", "Yes"] },
+                      {
+                        $and: [
+                          { $eq: ["$settled", "No"] },
+                          { $eq: ["$claim", "Yes"] },
+                        ],
+                      },
                     ],
                   },
                   1,
