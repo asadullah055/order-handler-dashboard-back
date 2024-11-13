@@ -162,25 +162,43 @@ class orderController {
     try {
       const fortyFiveDaysAgo = new Date();
       fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
-      const data = await get_order(req, {
-        settled: "No",
-        orderStatus: "transit",
-        date: { $lte: fortyFiveDaysAgo },
-      });
+
+      // Define primary filters to find unsettled or claimed orders
+      const filters = [
+        {
+          settled: "No",
+          orderStatus: "transit",
+          date: { $lte: fortyFiveDaysAgo },
+        },
+        {
+          claim: "Yes",
+        },
+      ];
+
+      // Use get_order with combined filters
+      const data = await get_order(req, filters);
+
       /* const pageNo = Number(req.query.pageNo) || 1;
       const perPage = Number(req.query.perPage) || 20;
       const skipRow = (pageNo - 1) * perPage;
-     
 
       let data = await orderModel.aggregate([
         {
           $match: {
-            sellerId: objectId(req.id),
-            settled: "No",
-            orderStatus: "transit",
-            date: { $lte: fortyFiveDaysAgo },
+            $or: [
+              {
+                sellerId: objectId(req.id),
+                settled: "No",
+                orderStatus: "transit",
+                date: { $lte: fortyFiveDaysAgo },
+              },
+              {
+                claim: "Yes",
+              },
+            ],
           },
         },
+
         {
           $facet: {
             total: [{ $count: "count" }],
@@ -204,7 +222,7 @@ class orderController {
   };
   get_returned_order = async (req, res, next) => {
     try {
-      const data = await get_order(req, { orderStatus: "Return" });
+      const data = await get_order(req, [{ orderStatus: "Return" }]);
       const totalReturnItem = data[0].total[0] ? data[0].total[0].count : 0;
       successMessage(res, 200, {
         totalReturnItem,
@@ -218,7 +236,7 @@ class orderController {
   };
   get_delivery_failed_order = async (req, res, next) => {
     try {
-      const data = await get_order(req, { orderStatus: "Delivery Failed" });
+      const data = await get_order(req, [{ orderStatus: "Delivery Failed" }]);
       const totalDfItem = data[0].total[0] ? data[0].total[0].count : 0;
       successMessage(res, 200, {
         totalDfItem,
@@ -258,12 +276,17 @@ class orderController {
   };
 
   update_single_order = async (req, res, next) => {
-    const { orderNumber } = req.params; // Extracting both orderNumber and caseNumber from params
+    const { orderNumber } = req.params;
     const updateData = req.body;
     const sellerId = objectId(req.id);
 
     try {
       if (updateData.orderStatus === "Delivered") {
+        updateData.settled = "Yes";
+      } else if (
+        updateData.orderStatus === "Delivery Failed" &&
+        updateData.claim == "No"
+      ) {
         updateData.settled = "Yes";
       }
       const query = {
@@ -301,6 +324,7 @@ class orderController {
     try {
       const fortyFiveDaysAgo = new Date();
       fortyFiveDaysAgo.setDate(fortyFiveDaysAgo.getDate() - 45);
+
       const data = await orderModel.aggregate([
         { $match: { sellerId: objectId(req.id) } },
         {
@@ -308,9 +332,7 @@ class orderController {
             _id: null,
             totalOrders: { $sum: 1 },
             totalTransit: {
-              $sum: {
-                $cond: [{ $eq: ["$orderStatus", "transit"] }, 1, 0],
-              },
+              $sum: { $cond: [{ $eq: ["$orderStatus", "transit"] }, 1, 0] },
             },
             totalDF: {
               $sum: {
@@ -318,9 +340,7 @@ class orderController {
               },
             },
             totalDelivered: {
-              $sum: {
-                $cond: [{ $eq: ["$orderStatus", "Delivered"] }, 1, 0],
-              },
+              $sum: { $cond: [{ $eq: ["$orderStatus", "Delivered"] }, 1, 0] },
             },
             totalReturn: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "Return"] }, 1, 0] },
@@ -329,10 +349,15 @@ class orderController {
               $sum: {
                 $cond: [
                   {
-                    $and: [
-                      { $eq: ["$settled", "No"] },
-                      { $eq: ["$orderStatus", "transit"] },
-                      { $lte: ["$date", fortyFiveDaysAgo] },
+                    $or: [
+                      {
+                        $and: [
+                          { $eq: ["$settled", "No"] },
+                          { $eq: ["$orderStatus", "transit"] },
+                          { $lte: ["$date", fortyFiveDaysAgo] },
+                        ],
+                      },
+                      { $eq: ["$claim", "Yes"] },
                     ],
                   },
                   1,
@@ -340,7 +365,6 @@ class orderController {
                 ],
               },
             },
-
             totalNotDrop: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "Not Drop"] }, 1, 0] },
             },
@@ -361,31 +385,31 @@ class orderController {
 
       const result = data[0] || {
         totalOrders: 0,
+        totalTransit: 0,
         totalDF: 0,
+        totalDelivered: 0,
         totalReturn: 0,
         totalUnSettled: 0,
-        totalTransit: 0,
         totalNotDrop: 0,
         totalItemLoss: 0,
         totalScraped: 0,
         totalNRY: 0,
-        totalDelivered: 0,
       };
 
       successMessage(res, 200, {
         totalOrders: result.totalOrders,
         totalTransit: result.totalTransit,
         totalDF: result.totalDF,
+        totalDelivered: result.totalDelivered,
         totalReturn: result.totalReturn,
         totalUnSettled: result.totalUnSettled,
-        totalTransit: result.totalTransit,
         totalNotDrop: result.totalNotDrop,
         totalItemLoss: result.totalItemLoss,
         totalScraped: result.totalScraped,
         totalNRY: result.totalNRY,
-        totalDelivered: result.totalDelivered,
       });
     } catch (error) {
+      console.error(error);
       next(error);
     }
   };

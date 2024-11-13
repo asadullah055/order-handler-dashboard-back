@@ -1,13 +1,13 @@
 const orderModel = require("../model/orderModel");
 const mongoose = require("mongoose");
 const objectId = mongoose.Types.ObjectId.createFromHexString;
-const get_order = async (req, filter) => {
+const get_order = async (req, filters) => {
   const pageNo = Number(req.query.pageNo) || 1;
   const perPage = Number(req.query.perPage) || 20;
   const skipRow = (pageNo - 1) * perPage;
 
   let data = await orderModel.aggregate([
-    { $match: { sellerId: objectId(req.id), ...filter } },
+    { $match: { sellerId: objectId(req.id), $or: filters } },
     {
       $facet: {
         total: [{ $count: "count" }],
