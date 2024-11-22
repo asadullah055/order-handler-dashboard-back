@@ -5,6 +5,7 @@ const orderSchema = new Schema(
     orderNumber: {
       type: String,
       required: true,
+      trim: true,
     },
     sellerId: { type: mongoose.Schema.Types.ObjectId },
     date: {
@@ -26,7 +27,7 @@ const orderSchema = new Schema(
     },
     settled: {
       type: String,
-      default: 'No',
+      default: "No",
     },
     claim: {
       type: String,
@@ -36,11 +37,11 @@ const orderSchema = new Schema(
       type: [
         {
           claimName: { type: String },
-          caseNumber: { type: String}, 
+          caseNumber: { type: String, trim: true },
           claimDate: { type: String },
           claimStatus: { type: String },
-          paidAmount: { type: String},
-          invoiceCycle: { type: String },
+          paidAmount: { type: String, trim: true },
+          invoiceCycle: { type: String, trim: true },
           claimDetails: { type: String },
           arMailDate: { type: String },
         },

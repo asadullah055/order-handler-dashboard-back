@@ -105,6 +105,8 @@ class orderController {
       matchQuery.$or = [
         { orderNumber },
         { claimType: { $elemMatch: { caseNumber: orderNumber } } },
+        // Add regex to match the last 4 digits
+        { orderNumber: { $regex: `${orderNumber.slice(-4)}$`, $options: "i" } },
       ];
     }
 
