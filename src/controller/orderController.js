@@ -3,6 +3,7 @@ const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
 const mongoose = require("mongoose");
 const get_order = require("../service/getOrderService");
+const e = require("express");
 const objectId = mongoose.Types.ObjectId.createFromHexString;
 class orderController {
   add_order = async (req, res, next) => {
@@ -82,32 +83,91 @@ class orderController {
       ? [req.query.settled]
       : [];
 
-    // const claimType = req.query.claimType || "";
     const orderNumber = req.query.orderNumber || "";
     const skipRow = (pageNo - 1) * perPage;
 
     const { startDate, endDate } = req.query.date || {};
-
     const receivedDate = req.query.receivedDate || {};
     const dfMailDate = req.query.dfMailDate || {};
     const sellerId = req.id ? objectId(req.id) : null;
-    let data;
 
     const matchQuery = {};
 
     if (status.length) matchQuery.orderStatus = { $in: status };
     if (claim.length) matchQuery.claim = { $in: claim };
-    // if (claimType) matchQuery.approvedOrReject = claimType;
     if (settled.length) matchQuery.settled = { $in: settled };
     if (sellerId) matchQuery.sellerId = sellerId;
 
-    if (orderNumber) {
-      matchQuery.$or = [
-        { orderNumber },
-        { claimType: { $elemMatch: { caseNumber: orderNumber } } },
-        // Add regex to match the last 4 digits
-        { orderNumber: { $regex: `${orderNumber.slice(-4)}$`, $options: "i" } },
-      ];
+    if (orderNumber.length >= 5 || orderNumber.length === 3) {
+      const lastFour = orderNumber.slice(-4);
+      const findOrder = await orderModel.aggregate([
+        {
+          $match: {
+            $or: [
+              { orderNumber: orderNumber },
+              { claimType: { $elemMatch: { caseNumber: orderNumber } } },
+            ],
+          },
+        },
+      ]);
+
+      if (findOrder.length !== 0) {
+        const fourDigitOrder1 = await orderModel.aggregate([
+          {
+            $addFields: {
+              lastFourDigits: {
+                $substr: [
+                  "$orderNumber",
+                  {
+                    $max: [
+                      { $subtract: [{ $strLenCP: "$orderNumber" }, 4] },
+                      0,
+                    ],
+                  },
+                  4,
+                ],
+              },
+            },
+          },
+          {
+            $match: {
+              lastFourDigits: lastFour,
+            },
+          },
+        ]);
+
+        const orderNumbers = fourDigitOrder1.map((order) => order.orderNumber);
+        matchQuery.$or = [
+          { orderNumber: { $in: orderNumbers } },
+          { claimType: { $elemMatch: { caseNumber: orderNumber } } },
+        ];
+      } else {
+        return successMessage(res, 200, { message: "Data Not found" });
+      }
+    } else if (orderNumber.length === 4) {
+      const fourDigitOrder = await orderModel.aggregate([
+        {
+          $addFields: {
+            lastFourDigits: {
+              $substr: [
+                "$orderNumber",
+                {
+                  $max: [{ $subtract: [{ $strLenCP: "$orderNumber" }, 4] }, 0],
+                },
+                4,
+              ],
+            },
+          },
+        },
+        {
+          $match: {
+            lastFourDigits: orderNumber,
+          },
+        },
+      ]);
+
+      const orderNumbers = fourDigitOrder.map((order) => order.orderNumber);
+      matchQuery.orderNumber = { $in: orderNumbers };
     }
 
     if (startDate && endDate) {
@@ -117,7 +177,6 @@ class orderController {
       };
     }
 
-    // Adding filter for receivedDate
     if (receivedDate.startDate && receivedDate.endDate) {
       matchQuery.receivedDate = {
         $gte: new Date(receivedDate.startDate),
@@ -125,7 +184,6 @@ class orderController {
       };
     }
 
-    // Adding filter for dfMailDate
     if (dfMailDate.startDate && dfMailDate.endDate) {
       matchQuery.dfMailDate = {
         $gte: new Date(dfMailDate.startDate),
@@ -134,13 +192,22 @@ class orderController {
     }
 
     try {
-      data = await orderModel.aggregate([
+      const sortPriority = orderNumber ? 1 : 0; // If an order number is provided, prioritize it.
+
+      const data = await orderModel.aggregate([
         { $match: matchQuery },
+        {
+          $addFields: {
+            priority: {
+              $cond: [{ $eq: ["$orderNumber", orderNumber] }, sortPriority, 0],
+            },
+          },
+        },
         {
           $facet: {
             total: [{ $count: "count" }],
             orders: [
-              { $sort: { date: -1 } },
+              { $sort: { priority: -1, date: -1 } },
               { $skip: skipRow },
               { $limit: perPage },
             ],
@@ -150,12 +217,12 @@ class orderController {
 
       const totalItem = data[0].total[0] ? data[0].total[0].count : 0;
 
-      successMessage(res, 200, {
+      return successMessage(res, 200, {
         totalItem,
         orders: data[0].orders,
       });
     } catch (error) {
-      console.log(error);
+      console.error("Error fetching orders:", error.message);
       next(error);
     }
   };
