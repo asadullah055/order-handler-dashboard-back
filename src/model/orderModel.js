@@ -52,6 +52,22 @@ const orderSchema = new Schema(
       type: String,
       default: "",
     },
+    link: {
+      type: String,
+      default: "",
+    },
+    packageLocation: {
+      type: String,
+      default: "",
+    },
+    hubLocation: {
+      type: String,
+      default: "",
+    },
+    packagingTime: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true, versionKey: false }
 );
