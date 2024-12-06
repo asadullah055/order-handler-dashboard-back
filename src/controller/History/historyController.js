@@ -1,39 +1,137 @@
-const orderHistory = require("../../model/orderHistory");
+const orderHistory = require("../../model/orderHistoryModel");
 const orderModel = require("../../model/orderModel");
-const updateOrder = async (req, res) => {
-  const { orderId } = req.params;
-  const updates = req.body;
+
+const updateOrders = async (req, res) => {
+  const updatesArray = req.body;
 
   try {
-    const order = await orderModel.findById(orderId);
-    if (!order) return res.status(404).json({ error: "Order not found" });
+    const results = [];
 
-    // Prepare the changes for history log
-    const previousData = {};
-    const changes = {};
+    for (const update of updatesArray) {
+      const { orderNumber, ...updatedFields } = update;
 
-    Object.keys(updates).forEach((key) => {
-      if (order[key] !== updates[key]) {
-        previousData[key] = order[key]; // Store old values
-        changes[key] = updates[key]; // Store new values
+      // Find the order by orderNumber
+      const order = await orderModel.findOne({ orderNumber });
+      if (!order) {
+        results.push({ orderNumber, error: "Order not found" });
+        continue;
       }
-    });
 
-    // Log the change history
-    await orderHistory.create({
-      orderId,
-      changes,
-      previousData,
-    });
+      // Clone the full previous state
+      const previousData = { ...order._doc };
 
-    // Apply the updates
-    Object.assign(order, updates);
-    await order.save();
+      // Prepare the changes object dynamically
+      const changes = {};
+
+      // Detect changes for any field
+      for (const key in updatedFields) {
+        if (order[key] !== updatedFields[key]) {
+          changes[key] = updatedFields[key]; // New value
+        }
+      }
+
+      if (Object.keys(changes).length > 0) {
+        // Log the full previous data and changes
+        await orderHistory.create({
+          orderNumber,
+          previousData,
+          changes,
+          updatedAt: new Date(),
+        });
+
+        // Apply the updates dynamically
+        Object.assign(order, changes);
+        await order.save();
+
+        results.push({
+          orderNumber,
+          message: "Order updated successfully",
+          updatedData: order,
+        });
+      } else {
+        results.push({
+          orderNumber,
+          message: "No changes applied, order already up-to-date",
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Batch update completed",
+      results,
+    });
+  } catch (error) {
+    console.log(error);
 
     return res
-      .status(200)
-      .json({ message: "Order updated successfully", order });
-  } catch (error) {
-    return res.status(500).json({ error: "Failed to update order" });
+      .status(500)
+      .json({ error: "Failed to update orders", details: error.message });
   }
 };
+const updateSingleOrders = async (req, res) => {
+  const reqBody = req.body;
+
+  try {
+    const results = [];
+
+    for (const update of reqBody) {
+      const { orderNumber, ...updatedFields } = update;
+
+      // Find the order by orderNumber
+      const order = await orderModel.findOne({ orderNumber });
+      if (!order) {
+        results.push({ orderNumber, error: "Order not found" });
+        continue;
+      }
+
+      // Clone the full previous state
+      const previousData = { ...order._doc };
+
+      // Prepare the changes object dynamically
+      const changes = {};
+
+      // Detect changes for any field
+      for (const key in updatedFields) {
+        if (order[key] !== updatedFields[key]) {
+          changes[key] = updatedFields[key]; // New value
+        }
+      }
+
+      if (Object.keys(changes).length > 0) {
+        // Log the full previous data and changes
+        await orderHistory.create({
+          orderNumber,
+          previousData,
+          changes,
+        });
+
+        // Apply the updates dynamically
+        Object.assign(order, changes);
+        await order.save();
+
+        results.push({
+          orderNumber,
+          updatedData: order,
+        });
+      } else {
+        results.push({
+          orderNumber,
+          message: "No changes applied, order already up-to-date",
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Batch update completed",
+      results,
+    });
+  } catch (error) {
+    console.log(error);
+
+    return res
+      .status(500)
+      .json({ error: "Failed to update orders", details: error.message });
+  }
+};
+
+module.exports = { updateOrders, updateSingleOrders };

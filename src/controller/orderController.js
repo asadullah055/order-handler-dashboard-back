@@ -4,6 +4,7 @@ const { successMessage } = require("../utill/respons");
 const mongoose = require("mongoose");
 const get_order = require("../service/getOrderService");
 const e = require("express");
+const orderHistory = require("../model/orderHistoryModel");
 const objectId = mongoose.Types.ObjectId.createFromHexString;
 class orderController {
   add_order = async (req, res, next) => {
@@ -52,7 +53,15 @@ class orderController {
       }));
 
       // Insert the new orders
-      await orderModel.insertMany(ordersWithSellerId);
+      const insertedOrders = await orderModel.insertMany(ordersWithSellerId);
+
+      const historyLogs = insertedOrders.map((order) => ({
+        orderNumber: order.orderNumber,
+        previousData: null, // No previous data for new orders
+        changes: { ...order._doc },
+      }));
+
+      await orderHistory.insertMany(historyLogs);
 
       successMessage(res, 200, {
         insertedOrders: ordersWithSellerId,
@@ -196,6 +205,7 @@ class orderController {
 
       const data = await orderModel.aggregate([
         { $match: matchQuery },
+        { $match: { orderStatus: { $ne: "Delete" } } },
         {
           $addFields: {
             priority: {
@@ -348,7 +358,7 @@ class orderController {
     const { orderNumber } = req.params;
     const updateData = req.body;
     const sellerId = objectId(req.id);
-
+    const previousOrder = await orderModel.findOne({ orderNumber });
     try {
       if (updateData.orderStatus === "Delivered") {
         updateData.settled = "Yes";
@@ -372,6 +382,20 @@ class orderController {
       if (!updatedOrder) {
         return next(createError(404, "Order not found"));
       }
+      const changes = {};
+      for (const key in updateData) {
+        if (previousOrder[key] !== updateData[key]) {
+          changes[key] = {
+            old: previousOrder[key], // Old value
+            new: updateData[key], // New value
+          };
+        }
+      }
+      await orderHistory.create({
+        orderNumber,
+        previousData: previousOrder,
+        changes,
+      });
 
       successMessage(res, 200, {
         updatedOrder,
@@ -399,7 +423,9 @@ class orderController {
         {
           $group: {
             _id: null,
-            totalOrders: { $sum: 1 },
+            totalOrders: {
+              $sum: { $cond: [{ $ne: ["$orderStatus", "Delete"] }, 1, 0] },
+            },
             totalTransit: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "transit"] }, 1, 0] },
             },

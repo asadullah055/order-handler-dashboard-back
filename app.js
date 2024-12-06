@@ -4,12 +4,13 @@ const rateLimit = require("express-rate-limit");
 const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const hpp = require("hpp");
-const cookieParser = require('cookie-parser');
+const cookieParser = require("cookie-parser");
 const cors = require("cors");
 const orderRoute = require("./src/routes/orderRoute");
 const { errorMessage } = require("./src/utill/respons");
 const connectDB = require("./src/config/db");
 const sellerRoute = require("./src/routes/sellerRoutes");
+const historyRoute = require("./src/routes/historyRoute");
 const app = express();
 
 /* const rateLimiter = rateLimit({
@@ -31,15 +32,16 @@ app.use(express.json());
 app.use(mongoSanitize());
 app.use(helmet());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser())
+app.use(cookieParser());
 app.get("/", (req, res) => {
   res.status(200).send("Api is working fine");
 });
 
 app.use("/", orderRoute);
+app.use("/", historyRoute);
 app.use("/", sellerRoute);
 
-connectDB() 
+connectDB();
 
 app.use((req, res, next) => {
   next(createError(404, "router not found"));
