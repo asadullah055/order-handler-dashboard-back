@@ -8,6 +8,7 @@ const orderHistorySchema = new Schema(
     },
     previousData: { type: Object },
     changes: { type: Object },
+    operation: { type: "String" },
   },
   { timestamps: true, versionKey: false }
 );
