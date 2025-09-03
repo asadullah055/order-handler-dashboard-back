@@ -313,6 +313,19 @@ class orderController {
       next(error);
     }
   };
+  get_transit_order = async (req, res, next) => {
+    try {
+      const data = await get_order(req, [{ orderStatus: "transit" }]);
+      const totalTransitItem = data[0].total[0] ? data[0].total[0].count : 0;
+      successMessage(res, 200, {
+        totalTransitItem,
+        transitOrders: data[0].orders,
+      });
+    } catch (error) {
+      console.log(error);
+      next(error);
+    }
+  };
   get_delivery_failed_order = async (req, res, next) => {
     try {
       const data = await get_order(req, [{ orderStatus: "Delivery Failed" }]);

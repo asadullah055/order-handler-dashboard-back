@@ -23,6 +23,7 @@ orderRoute.get(
 );
 
 orderRoute.get("/return-order", isLoggedIn, orderController.get_returned_order);
+orderRoute.get("/transit-order", isLoggedIn, orderController.get_transit_order);
 
 orderRoute.get("/delivery-failed-order", isLoggedIn, orderController.get_delivery_failed_order);
 
