@@ -3,17 +3,21 @@ const orderModel = require("../model/orderModel");
 const { successMessage } = require("../utill/respons");
 const mongoose = require("mongoose");
 const get_order = require("../service/getOrderService");
-const e = require("express");
 const orderHistory = require("../model/orderHistoryModel");
 const objectId = mongoose.Types.ObjectId.createFromHexString;
+const DELETED_STATUS = "DELETE";
 class orderController {
   add_order = async (req, res, next) => {
-    const { newOrders } = req.body;
-
-    const sellerId = objectId(req.id);
-    const orderNumbers = newOrders.map((order) => order.orderNumber);
-
     try {
+      const { newOrders } = req.body;
+
+      if (!Array.isArray(newOrders) || newOrders.length === 0) {
+        return next(createError(400, "newOrders must be a non-empty array"));
+      }
+
+      const sellerId = objectId(req.id);
+      const orderNumbers = newOrders.map((order) => order.orderNumber);
+
       const existingOrders = await orderModel.aggregate([
         {
           $match: {
@@ -112,6 +116,7 @@ class orderController {
       const findOrder = await orderModel.aggregate([
         {
           $match: {
+            sellerId,
             $or: [
               { orderNumber: orderNumber },
               { claimType: { $elemMatch: { caseNumber: orderNumber } } },
@@ -122,6 +127,11 @@ class orderController {
 
       if (findOrder.length !== 0) {
         const fourDigitOrder1 = await orderModel.aggregate([
+          {
+            $match: {
+              sellerId,
+            },
+          },
           {
             $addFields: {
               lastFourDigits: {
@@ -155,6 +165,11 @@ class orderController {
       }
     } else if (orderNumber.length === 4) {
       const fourDigitOrder = await orderModel.aggregate([
+        {
+          $match: {
+            sellerId,
+          },
+        },
         {
           $addFields: {
             lastFourDigits: {
@@ -205,7 +220,7 @@ class orderController {
 
       const data = await orderModel.aggregate([
         { $match: matchQuery },
-        { $match: { orderStatus: { $ne: "Delete" } } },
+        { $match: { orderStatus: { $not: /^DELETE$/i } } },
         {
           $addFields: {
             priority: {
@@ -368,23 +383,28 @@ class orderController {
   };
 
   update_single_order = async (req, res, next) => {
-    const { orderNumber } = req.params;
-    const updateData = req.body;
-    const sellerId = objectId(req.id);
-    const previousOrder = await orderModel.findOne({ orderNumber });
     try {
-      if (updateData.orderStatus === "Delivered") {
-        updateData.settled = "Yes";
-      } else if (
-        updateData.orderStatus === "Delivery Failed" &&
-        updateData.claim == "No"
-      ) {
-        updateData.settled = "Yes";
-      }
+      const { orderNumber } = req.params;
+      const updateData = req.body;
+      const sellerId = objectId(req.id);
       const query = {
         sellerId,
         $or: [{ orderNumber }, { "claimType.caseNumber": orderNumber }],
       };
+      const previousOrder = await orderModel.findOne(query);
+
+      if (!previousOrder) {
+        return next(createError(404, "Order not found"));
+      }
+
+      if (updateData.orderStatus === "Delivered") {
+        updateData.settled = "Yes";
+      } else if (
+        updateData.orderStatus === "Delivery Failed" &&
+        updateData.claim === "No"
+      ) {
+        updateData.settled = "Yes";
+      }
 
       const updatedOrder = await orderModel.findOneAndUpdate(
         query,
@@ -397,10 +417,16 @@ class orderController {
       }
       const changes = {};
       for (const key in updateData) {
-        if (previousOrder[key] !== updateData[key]) {
+        const oldValue = previousOrder[key];
+        const newValue = updateData[key];
+        const isSameValue =
+          typeof oldValue === "object" || typeof newValue === "object"
+            ? JSON.stringify(oldValue) === JSON.stringify(newValue)
+            : oldValue === newValue;
+        if (!isSameValue) {
           changes[key] = {
-            old: previousOrder[key], // Old value
-            new: updateData[key], // New value
+            old: oldValue,
+            new: newValue,
           };
         }
       }
@@ -437,7 +463,9 @@ class orderController {
           $group: {
             _id: null,
             totalOrders: {
-              $sum: { $cond: [{ $ne: ["$orderStatus", "Delete"] }, 1, 0] },
+              $sum: {
+                $cond: [{ $ne: [{ $toUpper: "$orderStatus" }, DELETED_STATUS] }, 1, 0],
+              },
             },
             totalTransit: {
               $sum: { $cond: [{ $eq: ["$orderStatus", "transit"] }, 1, 0] },
@@ -530,6 +558,9 @@ class orderController {
   update_bulk_order = async (req, res, next) => {
     try {
       const reqBody = req.body;
+      if (!Array.isArray(reqBody) || reqBody.length === 0) {
+        return next(createError(400, "Request body must be a non-empty array"));
+      }
 
       const sellerId = objectId(req.id);
       const orderNumbers = reqBody.map((order) => order.orderNumber);
@@ -569,6 +600,9 @@ class orderController {
         const updatedOrder = reqBody.find(
           (item) => item.orderNumber === order.orderNumber
         );
+        if (!updatedOrder || !updatedOrder.status) {
+          return null;
+        }
 
         const update = {
           $set: {
@@ -580,14 +614,20 @@ class orderController {
             settled: updatedOrder.status === "Delivered" ? "Yes" : "No",
           },
         };
-
         return {
           updateOne: {
             filter: { orderNumber: order.orderNumber, sellerId: sellerId },
             update,
           },
         };
-      });
+      }).filter(Boolean);
+
+      if (bulkOps.length === 0) {
+        return successMessage(res, 200, {
+          message: "No eligible transit orders found for update",
+          missingOrders,
+        });
+      }
 
       // Step 5: Execute the bulkWrite operation to update the orders
       await orderModel.bulkWrite(bulkOps);
@@ -598,6 +638,76 @@ class orderController {
       console.log(error);
 
       next(error); // Pass any error to the error handler
+    }
+  };
+
+  delete_orders = async (req, res, next) => {
+    try {
+      const { confirmText, orderNumbers } = req.body;
+      const normalizedConfirmText = String(confirmText || "")
+        .trim()
+        .toLowerCase();
+
+      if (normalizedConfirmText !== "delete") {
+        return next(createError(400, "Type delete to confirm order deletion"));
+      }
+
+      if (!Array.isArray(orderNumbers) || orderNumbers.length === 0) {
+        return next(createError(400, "orderNumbers must be a non-empty array"));
+      }
+
+      const normalizedOrderNumbers = orderNumbers
+        .filter((orderNumber) => typeof orderNumber === "string")
+        .map((orderNumber) => orderNumber.trim())
+        .filter(Boolean);
+
+      if (normalizedOrderNumbers.length === 0) {
+        return next(createError(400, "No valid order numbers provided"));
+      }
+
+      const sellerId = objectId(req.id);
+
+      const existingOrders = await orderModel
+        .find({
+          sellerId,
+          orderNumber: { $in: normalizedOrderNumbers },
+        })
+        .lean();
+
+      const foundOrderNumbers = existingOrders.map((order) => order.orderNumber);
+      const missingOrders = normalizedOrderNumbers.filter(
+        (orderNumber) => !foundOrderNumbers.includes(orderNumber)
+      );
+
+      if (foundOrderNumbers.length === 0) {
+        return successMessage(res, 200, {
+          message: "No matching orders found to delete",
+          deletedCount: 0,
+          missingOrders,
+        });
+      }
+
+      const deleteResult = await orderModel.deleteMany({
+        sellerId,
+        orderNumber: { $in: foundOrderNumbers },
+      });
+
+      await orderHistory.insertMany(
+        existingOrders.map((order) => ({
+          orderNumber: order.orderNumber,
+          previousData: order,
+          changes: { deleted: true },
+          operation: "DELETE",
+        }))
+      );
+
+      return successMessage(res, 200, {
+        message: "Orders deleted successfully",
+        deletedCount: deleteResult.deletedCount,
+        missingOrders,
+      });
+    } catch (error) {
+      next(error);
     }
   };
 }

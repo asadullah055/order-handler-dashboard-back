@@ -38,5 +38,6 @@ orderRoute.put(
   isLoggedIn,
   orderController.update_bulk_order
 );
+orderRoute.delete("/delete-orders", isLoggedIn, orderController.delete_orders);
 
 module.exports = orderRoute;

@@ -1,14 +1,13 @@
-const mongoose = require("mongoose");
 const { Schema, model } = require("mongoose");
 
 const orderHistorySchema = new Schema(
   {
     orderNumber: {
-      type: "String",
+      type: String,
     },
     previousData: { type: Object },
     changes: { type: Object },
-    operation: { type: "String" },
+    operation: { type: String },
   },
   { timestamps: true, versionKey: false }
 );

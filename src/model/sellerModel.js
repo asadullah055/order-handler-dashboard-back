@@ -1,4 +1,4 @@
-const { Schema, model, set } = require("mongoose");
+const { Schema, model } = require("mongoose");
 const bcrypt = require("bcryptjs");
 const sellerSchema = new Schema({
   name: {
@@ -8,6 +8,9 @@ const sellerSchema = new Schema({
   email: {
     type: String,
     required: true,
+    unique: true,
+    trim: true,
+    lowercase: true,
   },
   shopName: {
     type: String,

@@ -7,13 +7,12 @@ const isLoggedIn = async (req, res, next) => {
     const token = req.cookies.accessToken;
 
     if (!token) {
-      throw createError(404, "Access toke not found. Please Log in");
+      throw createError(401, "Access token not found. Please log in");
     }
     const decoded = jwt.verify(token, secretKey);
-    
 
     if (!decoded) {
-      throw createError(404, "Invalid Access token. Please Log in");
+      throw createError(401, "Invalid access token. Please log in");
     }
     req.id = decoded.id;
     req.email = decoded.email;

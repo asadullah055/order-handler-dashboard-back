@@ -31,6 +31,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(mongoSanitize());
 app.use(helmet());
+app.use(hpp());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.get("/", (req, res) => {

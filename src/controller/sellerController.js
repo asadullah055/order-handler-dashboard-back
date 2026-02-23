@@ -9,6 +9,7 @@ const formidable = require("formidable");
 class sellerController {
   registration_seller = async (req, res, next) => {
     try {
+      const isProduction = process.env.NODE_ENV === "production";
       const { email } = req.body;
       const exitUser = await sellerModel.exists({ email: email });
       if (exitUser) {
@@ -25,10 +26,10 @@ class sellerController {
         "7d"
       );
       res.cookie("accessToken", token, {
-        maxAge: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: true,
-        sameSite: "none",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
       });
       /*  const sellerWithoutPassword = await sellerModel
         .findOne({ email })
@@ -45,6 +46,7 @@ class sellerController {
   };
   login_seller = async (req, res, next) => {
     try {
+      const isProduction = process.env.NODE_ENV === "production";
       const { email, password } = req.body;
       const seller = await sellerModel.findOne({ email });
 
@@ -66,10 +68,10 @@ class sellerController {
         "7d"
       );
       res.cookie("accessToken", token, {
-        maxAge: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        maxAge: 7 * 24 * 60 * 60 * 1000,
         httpOnly: true,
-        secure: process.env !== "development",
-        sameSite: "none",
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
       });
 
       successMessage(res, 200, {
@@ -137,7 +139,12 @@ class sellerController {
 
   logout = async (req, res, next) => {
     try {
-      res.clearCookie("accessToken");
+      const isProduction = process.env.NODE_ENV === "production";
+      res.clearCookie("accessToken", {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: isProduction ? "none" : "lax",
+      });
       // success message
       successMessage(res, 200, { message: "Logout successfully" });
     } catch (error) {
